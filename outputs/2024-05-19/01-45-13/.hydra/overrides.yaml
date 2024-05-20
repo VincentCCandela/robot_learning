@@ -1,0 +1,3 @@
+- alg.n_iter=1
+- alg.do_dagger=false
+- alg.train_idm=true

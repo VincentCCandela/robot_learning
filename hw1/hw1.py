@@ -51,6 +51,17 @@ def my_app(cfg: DictConfig):
     import os
     print("Command Dir:", os.getcwd())
     params = vars(cfg)
+
+    # # part 1.1: python run_hw1_bc.py alg.n_iter=1 alg.do_dagger=false alg.train_idm=true
+    # params['_content']['alg']['n_iter'] = 1
+    # params['_content']['alg']['do_dagger'] = False
+    # params['_content']['alg']['train_idm'] = True
+
+    # # part 2.1 python run_hw1_bc.py alg.n_iter=5 alg.do_dagger=true alg.train_idm=false
+    # params['_content']['alg']['n_iter'] = 5
+    # params['_content']['alg']['do_dagger'] = True
+    # params['_content']['alg']['train_idm'] = False
+
     # print ("params: ", json.dumps(params, indent=4))
     # print ("params: ", params)
 

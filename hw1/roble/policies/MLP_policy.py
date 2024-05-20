@@ -48,16 +48,22 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                     torch.ones(self._ac_dim, dtype=torch.float32, device=ptu.device) * 0.1
                 )
                 self._std.to(ptu.device)
-                if self._learn_policy_std:
-                    self._optimizer = optim.Adam(
-                        itertools.chain([self._std], self._mean_net.parameters()),
-                        self._learning_rate
-                    )
-                else:
-                    self._optimizer = optim.Adam(
-                        itertools.chain(self._mean_net.parameters()),
-                        self._learning_rate
-                    )
+                # if self._learn_policy_std:
+                #     self._optimizer = optim.Adam(
+                #         itertools.chain([self._std], self._mean_net.parameters()),
+                #         self._learning_rate
+                #     )
+                # else:
+                #     self._optimizer = optim.Adam(
+                #         itertools.chain(self._mean_net.parameters()),
+                #         self._learning_rate
+                #     )
+
+                self._optimizer = optim.Adam(
+                    itertools.chain(self._mean_net.parameters()),
+                    self._learning_rate
+                )
+
 
         if self._nn_baseline:
             self._baseline = ptu.build_mlp(
@@ -84,7 +90,23 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     def get_action(self, obs: np.ndarray) -> np.ndarray:
         # TODO: 
         ## Provide the logic to produce an action from the policy
-        pass
+        
+        # Convert the numpy array to a torch tensor
+        obs = ptu.from_numpy(obs)
+
+        # Get the action distribution from the forward function
+        action_distribution = self.forward(obs)
+
+        # Sample an action from the action distribution
+        if not isinstance(action_distribution, torch.Tensor):
+            action = action_distribution.sample()
+        else:
+            action = action_distribution
+        
+        # Convert the action to a numpy array
+        action = ptu.to_numpy(action)
+
+        return action
 
     # update/train this policy
     def update(self, observations, actions, **kwargs):
@@ -103,11 +125,12 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         else:
             if self._deterministic:
                 ##  TODO output for a deterministic policy
-                action_distribution = TODO
+                action_distribution = self._mean_net(observation)
             else:
                 
                 ##  TODO output for a stochastic policy
-                action_distribution = TODO
+                actions = self._mean_net(observation)
+                action_distribution = distributions.Normal(actions, self._std)
         return action_distribution
     ##################################
 
@@ -135,9 +158,18 @@ class MLPPolicySL(MLPPolicy):
         self, observations, actions,
         adv_n=None, acs_labels_na=None, qvals=None
         ):
+        observations = ptu.from_numpy(observations)
+        predicted_actions = self.forward(observations)
+        # convert the Normal distribution to a tensor
+        predicted_actions = predicted_actions.rsample()
+
+        # predicted_actions_first = predicted_actions[:, 0]
         
         # TODO: update the policy and return the loss
-        loss = TODO
+        loss = self._loss(predicted_actions, ptu.from_numpy(actions))
+        self._optimizer.zero_grad()
+        loss.backward()
+        self._optimizer.step()
         return {
             'Training Loss': ptu.to_numpy(loss),
         }
@@ -147,19 +179,24 @@ class MLPPolicySL(MLPPolicy):
         adv_n=None, acs_labels_na=None, qvals=None
         ):
         
-        
+        observations = ptu.from_numpy(observations)
+        next_observations = ptu.from_numpy(next_observations)
+        actions = ptu.from_numpy(actions)
+
         # TODO: Create the full input to the IDM model (hint: it's not the same as the actor as it takes both obs and next_obs)
-        
+        full_input = torch.cat([observations, next_observations], dim=1)
+
         # TODO: Transform the numpy arrays to torch tensors (for obs, next_obs and actions)
-        
-        # TODO: Create the full input to the IDM model (hint: it's not the same as the actor as it takes both obs and next_obs)
-        
+        # obs = ptu.from_numpy(observations)        
+
         # TODO: Get the predicted actions from the IDM model (hint: you need to call the forward function of the IDM model)
-        
+        predicted_actions = self.forward(full_input)
         # TODO: Compute the loss using the MLP_policy loss function
-        
+        loss = self._loss(predicted_actions, actions)
         # TODO: Update the IDM model.
-        loss = TODO
+        self._optimizer.zero_grad()
+        loss.backward()
+        self._optimizer.step()
         return {
             'Training Loss IDM': ptu.to_numpy(loss),
         }
